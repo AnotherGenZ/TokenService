@@ -1,0 +1,23 @@
+{
+  "name": "tokenservice",
+  "version": "1.0.0",
+  "description": "Centralizes token for Dyno",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MrJohnCoder/TokenService.git"
+  },
+  "author": "MrJohnCoder",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/MrJohnCoder/TokenService/issues"
+  },
+  "homepage": "https://github.com/MrJohnCoder/TokenService#readme",
+  "dependencies": {
+    "body-parser": "^1.18.3",
+    "express": "^4.16.3"
+  }
+}
