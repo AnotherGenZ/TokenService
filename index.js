@@ -1,6 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const forge = require('node-rsa');
+const forge = require('node-forge');
 const level = require('level');
 const fs = require('fs');
 const https = require('https');
