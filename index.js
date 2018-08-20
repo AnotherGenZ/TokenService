@@ -129,6 +129,7 @@ app.post('/token', (req, res) => {
     }
 
     if (decrypted.challenge === challenge.challenge) {
+        challenges.delete(serviceID);
         return res.status(200).send({ token: publicKey.encrypt(forge.util.encodeUtf8(process.env.BOT_TOKEN)) });
     } else {
         return res.status(401).send('Challenge mismatch');
