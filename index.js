@@ -139,5 +139,5 @@ app.post('/token', (req, res) => {
 const httpsServer = https.createServer(credentials, app);
 
 httpsServer.listen(process.env.PORT, () => {
-    console.log('HTTPS Server running on port 443');
+    console.log('DynoToken service ready!');
 });
