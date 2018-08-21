@@ -1,0 +1,15 @@
+{
+  "name": "tokenclient",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "MrJohnCoder",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.18.0",
+    "node-forge": "^0.7.6"
+  }
+}
