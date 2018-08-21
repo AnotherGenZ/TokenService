@@ -27,7 +27,7 @@ let challenges = new Map();
 
 app.use(bodyParser.json());
 
-app.get('/register', (req, res) => {
+app.get('/register', async (req, res) => {
     let auth = req.get('Authorization');
     let serviceID = req.query.serviceID;
 
@@ -65,6 +65,9 @@ app.get('/register', (req, res) => {
 
 app.get('/token', (req, res) => {
     let serviceID = req.query.serviceID;
+    let auth = req.get('Authorization');
+
+    if (!auth || auth !== process.env.AUTHORIZATION) return res.status(401).end();
 
     if (!serviceID) return res.status(400).send('Missing serviceID');
 
@@ -92,6 +95,9 @@ app.get('/token', (req, res) => {
 
 app.post('/token', (req, res) => {
     let serviceID = req.query.serviceID;
+    let auth = req.get('Authorization');
+
+    if (!auth || auth !== process.env.AUTHORIZATION) return res.status(401).end();
 
     if (!serviceID) return res.status(400).send('Missing serviceID');
 
