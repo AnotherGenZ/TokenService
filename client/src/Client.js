@@ -15,7 +15,7 @@ class Client {
     }
 
     registerKey(key, res, rej) {
-        fs.writeFile(this.privateKeyFile, Buffer.from(key).toString('ascii'), (err) => {
+        fs.writeFile(this.privateKeyFile, Buffer.from(key, 'base64').toString('utf8'), (err) => {
             rej(err);
         });
 
@@ -117,7 +117,7 @@ class Client {
             this.decryptKey(key, response.data.token, res, rej);
         }).catch(() => {
             setTimeout(() => {
-                this.agent.get('/token', {
+                this.agent.post('/token', {}, {
                     params: {
                         serviceID
                     },
@@ -129,9 +129,9 @@ class Client {
                 }).catch(err => {
                     if (err.response) {
                         if (err.response.status === 400) {
-                            rej(new Error(err.response.body));
+                            rej(new Error(err.response.data));
                         } else {
-                            rej(new Error(err.response.statusText));
+                            rej(new Error(err.response.data ? err.response.data : err.response.statusText));
                         }
                     } else if (err.request) {
                         rej(new Error('No response received'));

@@ -7,6 +7,7 @@ const https = require('https');
 const jwt = require('jsonwebtoken');
 let randomstring = require('randomstring');
 
+let db = level('./db');
 
 require('dotenv').config();
 
@@ -21,11 +22,23 @@ const credentials = {
 };
 
 let app = express();
-let db = level('./db');
+
 
 let challenges = new Map();
 
 app.use(bodyParser.json());
+
+function fetchService(serviceID) {
+    return new Promise((res, rej) => {
+        db.get(serviceID, (err, value) => {
+            if (err) {
+                return rej(err);
+            }
+
+            res(JSON.parse(value));
+        });
+    });
+}
 
 app.get('/register', async (req, res) => {
     let auth = req.get('Authorization');
@@ -33,25 +46,33 @@ app.get('/register', async (req, res) => {
 
     if (!serviceID) return res.status(400).send('Missing serviceID');
 
+    let existing;
+
+    try {
+        await fetchService(serviceID);
+        existing = true;
+    } catch (err) {
+        console.log(err);
+        existing = false;
+    }
+
+    if (existing) return res.status(403).end();
+
     if (auth && auth === process.env.AUTHORIZATION) {
         let keyPair;
 
         try {
-            forge.pki.rsa.generateKeyPair({ bits: 2048, workers: -1 }, (err, keypair) => {
-                if (err) throw new Error(err);
-
-                keyPair = keypair;
-            });
+            keyPair = await forge.pki.rsa.generateKeyPair({ bits: 2048, workers: -1 });
         } catch (err) {
             console.log(err);
             return res.status(500).end();
         }
 
         try {
-            await db.put(serviceID, {
+            await db.put(serviceID, JSON.stringify({
                 private: forge.pki.privateKeyToPem(keyPair.privateKey),
                 public: forge.pki.publicKeyToPem(keyPair.publicKey)
-            });
+            }));
         } catch (err) {
             console.log(err);
             return res.status(500).end();
@@ -63,7 +84,7 @@ app.get('/register', async (req, res) => {
     }
 });
 
-app.get('/token', (req, res) => {
+app.get('/token', async (req, res) => {
     let serviceID = req.query.serviceID;
     let auth = req.get('Authorization');
 
@@ -71,7 +92,7 @@ app.get('/token', (req, res) => {
 
     if (!serviceID) return res.status(400).send('Missing serviceID');
 
-    let service = db.get(serviceID);
+    let service = await fetchService(serviceID);
 
     if (!service) return res.status(401).send('Unregistered service');
 
@@ -79,7 +100,7 @@ app.get('/token', (req, res) => {
         length: 50
     });
 
-    let challenge = jwt.sign({ serviceID, challenge: challengeString }, service.private, {
+    let challenge = jwt.sign({ serviceID, challenge: challengeString }, process.env.SECRET, {
         expiresIn: 60,
         audience: serviceID,
         issuer: 'Dyno TokenService'
@@ -88,12 +109,12 @@ app.get('/token', (req, res) => {
     let md = forge.md.sha1.create();
     md.update(challenge, 'utf8');
 
-    challenges.set(serviceID, { challenge: challengeString, md });
+    challenges.set(serviceID, { challenge, challengeString, md });
 
     return res.status(200).send({ challenge });
 });
 
-app.post('/token', (req, res) => {
+app.post('/token', async (req, res) => {
     let serviceID = req.query.serviceID;
     let auth = req.get('Authorization');
 
@@ -105,7 +126,7 @@ app.post('/token', (req, res) => {
 
     if (!reqChallenge) return res.status(400).send('Missing challenge');
 
-    let service = db.get(serviceID);
+    let service = await fetchService(serviceID);
 
     if (!service) return res.status(401).send('Unregistered service');
 
@@ -123,10 +144,18 @@ app.post('/token', (req, res) => {
         return res.status(401).send('Invalid challenge');
     }
 
+    if (!verified) return res.status(401).send('Invalid challenge');
+
+    let privKey = forge.pki.privateKeyFromPem(service.private);
+
+    let signature = privKey.sign(challenge.md);
+
+    if (signature !== reqChallenge) return res.status(401).send('Incorrect challenge');
+
     let decrypted;
 
     try {
-        decrypted = jwt.verify(verified, service.public, {
+        decrypted = jwt.verify(challenge.challenge, process.env.SECRET, {
             audience: serviceID,
             issuer: 'Dyno TokenService'
         });
@@ -134,7 +163,7 @@ app.post('/token', (req, res) => {
         return res.status(401).send('Invalid/expired challenge');
     }
 
-    if (decrypted.challenge === challenge.challenge) {
+    if (decrypted.challenge === challenge.challengeString) {
         challenges.delete(serviceID);
         return res.status(200).send({ token: publicKey.encrypt(forge.util.encodeUtf8(process.env.BOT_TOKEN)) });
     } else {
@@ -146,4 +175,12 @@ const httpsServer = https.createServer(credentials, app);
 
 httpsServer.listen(process.env.PORT, () => {
     console.log('DynoToken service ready!');
+});
+
+process.on('uncaughtException', (err) => {
+    console.log(err);
+});
+
+process.on('unhandledRejection', (reason, p) => {
+    console.log(`Unhandled rejection at: Promise  ${p} reason:  ${reason.stack}`);
 });
