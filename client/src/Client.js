@@ -14,25 +14,49 @@ class Client {
         });
     }
 
+    registerKey(key, res, rej) {
+        fs.writeFile(this.privateKeyFile, Buffer.from(key).toString('ascii'), (err) => {
+            rej(err);
+        });
+
+        res();
+    }
+
+    fetchKey() {
+        return fs.readFileSync(this.privateKeyFile, 'utf8');
+    }
+
+    decryptKey(key, encryptedToken, res, rej) {
+        let decryptedToken = forge.util.decodeUtf8(key.decrypt(encryptedToken));
+
+        if (decryptedToken) {
+            res(decryptedToken);
+        } else {
+            rej(new Error('Invalid token'));
+        }
+    }
+
     register(serviceID) {
-        return new Promise(async (res, rej) => {
-            let response = await this.agent.get('/register', {
+        return new Promise((res, rej) => {
+            this.agent.get('/register', {
                 params: {
                     serviceID
                 }
+            }).then(response => {
+                this.registerKey(response.data.key, res, rej);
             }).catch(() => {
-                setTimeout(async () => {
-                    response = await this.agent.get('/register', {
+                setTimeout(() => {
+                    this.agent.get('/register', {
                         params: {
                             serviceID
                         }
+                    }).then(response => {
+                        this.registerKey(response.data.key, res, rej);
                     }).catch(err => {
                         if (err.response) {
                             if (err.response.status === 400) {
                                 rej(new Error(err.response.body));
-                            } else if (err.response.status === 401) {
-                                rej(new Error(err.response.statusText));
-                            } else if (err.response.status === 500) {
+                            } else {
                                 rej(new Error(err.response.statusText));
                             }
                         } else if (err.request) {
@@ -41,18 +65,79 @@ class Client {
                     });
                 }, this.retryTimeout);
             });
-
-            fs.writeFile(this.privateKeyFile, Buffer.from(response.data.key).toString('ascii'), (err) => {
-                rej(err);
-            });
-
-            res();
         });
     }
 
     getToken(serviceID) {
-        return new Promise(async(res, rej) => {
-            
+        return new Promise((res, rej) => {
+            this.agent.get('/token', {
+                params: {
+                    serviceID
+                }
+            }).then(response => {
+                this.respondWithChallenge(serviceID, response.data.challenge, res, rej);
+            }).catch(() => {
+                setTimeout(() => {
+                    this.agent.get('/token', {
+                        params: {
+                            serviceID
+                        }
+                    }).then(response => {
+                        this.respondWithChallenge(serviceID, response.data.challenge, res, rej);
+                    }).catch(err => {
+                        if (err.response) {
+                            if (err.response.status === 400) {
+                                rej(new Error(err.response.body));
+                            } else {
+                                rej(new Error(err.response.statusText));
+                            }
+                        } else if (err.request) {
+                            rej(new Error('No response received'));
+                        }
+                    });
+                }, this.retryTimeout);
+            });
+        });
+    }
+
+    respondWithChallenge(serviceID, challenge, res, rej) {
+        let fetchedKey = this.fetchKey();
+        let key = forge.pki.privateKeyFromPem(fetchedKey);
+        let md = forge.md.sha1.create().update(challenge, 'utf8');
+        let signature = key.sign(md);
+
+        this.agent.post('/token', {
+            params: {
+                serviceID
+            },
+            data: {
+                challenge: signature
+            }
+        }).then(response => {
+            this.decryptKey(key, response.data.token, res, rej);
+        }).catch(() => {
+            setTimeout(() => {
+                this.agent.get('/token', {
+                    params: {
+                        serviceID
+                    },
+                    data: {
+                        challenge: signature
+                    }
+                }).then(response => {
+                    this.decryptKey(key, response.data.token, res, rej);
+                }).catch(err => {
+                    if (err.response) {
+                        if (err.response.status === 400) {
+                            rej(new Error(err.response.body));
+                        } else {
+                            rej(new Error(err.response.statusText));
+                        }
+                    } else if (err.request) {
+                        rej(new Error('No response received'));
+                    }
+                });
+            }, this.retryTimeout);
         });
     }
 }

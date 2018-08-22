@@ -115,7 +115,7 @@ app.post('/token', (req, res) => {
 
     let verified;
 
-    let publicKey = forge.pki.publicKeyToPem(service.public);
+    let publicKey = forge.pki.publicKeyFromPem(service.public);
 
     try {
         verified = publicKey.verify(challenge.md.digest().bytes(), reqChallenge);
