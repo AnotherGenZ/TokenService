@@ -15,7 +15,7 @@ class Client {
     }
 
     registerKey(key, res, rej) {
-        fs.writeFile(this.privateKeyFile, Buffer.from(key, 'base64').toString('utf8'), (err) => {
+        fs.writeFile(this.privateKeyFile, key, (err) => {
             rej(err);
         });
 
@@ -37,21 +37,27 @@ class Client {
     }
 
     register(serviceID) {
-        return new Promise((res, rej) => {
-            this.agent.get('/register', {
+        return new Promise(async (res, rej) => {
+
+            let keyPair = await forge.pki.rsa.generateKeyPair({ bits: 2048, workers: -1 });
+
+            let publicKey = Buffer.from(forge.pki.publicKeyToPem(keyPair.publicKey)).toString('base64');
+            let privateKey = forge.pki.privateKeyToPem(keyPair.privateKey);
+
+            this.agent.post('/register', { publicKey }, {
                 params: {
                     serviceID
                 }
-            }).then(response => {
-                this.registerKey(response.data.key, res, rej);
+            }).then(() => {
+                this.registerKey(privateKey, res, rej);
             }).catch(() => {
                 setTimeout(() => {
-                    this.agent.get('/register', {
+                    this.agent.post('/register', { publicKey }, {
                         params: {
                             serviceID
                         }
-                    }).then(response => {
-                        this.registerKey(response.data.key, res, rej);
+                    }).then(() => {
+                        this.registerKey(privateKey, res, rej);
                     }).catch(err => {
                         if (err.response) {
                             if (err.response.status === 400) {
@@ -107,22 +113,20 @@ class Client {
         let signature = key.sign(md);
 
         this.agent.post('/token', {
+            challenge: signature
+        }, {
             params: {
                 serviceID
-            },
-            data: {
-                challenge: signature
             }
         }).then(response => {
             this.decryptKey(key, response.data.token, res, rej);
         }).catch(() => {
             setTimeout(() => {
-                this.agent.post('/token', {}, {
+                this.agent.post('/token', {
+                    challenge: signature
+                }, {
                     params: {
                         serviceID
-                    },
-                    data: {
-                        challenge: signature
                     }
                 }).then(response => {
                     this.decryptKey(key, response.data.token, res, rej);

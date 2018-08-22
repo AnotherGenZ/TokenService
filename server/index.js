@@ -40,11 +40,15 @@ function fetchService(serviceID) {
     });
 }
 
-app.get('/register', async (req, res) => {
+app.post('/register', async (req, res) => {
     let auth = req.get('Authorization');
     let serviceID = req.query.serviceID;
 
     if (!serviceID) return res.status(400).send('Missing serviceID');
+
+    let publicKey = req.body.publicKey;
+
+    if (!publicKey) return res.status(400).send('Missing publicKey');
 
     let existing;
 
@@ -59,26 +63,17 @@ app.get('/register', async (req, res) => {
     if (existing) return res.status(403).end();
 
     if (auth && auth === process.env.AUTHORIZATION) {
-        let keyPair;
-
-        try {
-            keyPair = await forge.pki.rsa.generateKeyPair({ bits: 2048, workers: -1 });
-        } catch (err) {
-            console.log(err);
-            return res.status(500).end();
-        }
 
         try {
             await db.put(serviceID, JSON.stringify({
-                private: forge.pki.privateKeyToPem(keyPair.privateKey),
-                public: forge.pki.publicKeyToPem(keyPair.publicKey)
+                public: Buffer.from(publicKey, 'base64').toString('utf8')
             }));
         } catch (err) {
             console.log(err);
             return res.status(500).end();
         }
 
-        return res.status(200).send({ key: Buffer.from(forge.pki.privateKeyToPem(keyPair.privateKey)).toString('base64') });
+        return res.status(200).end();
     } else {
         return res.status(401).end();
     }
@@ -146,12 +141,6 @@ app.post('/token', async (req, res) => {
 
     if (!verified) return res.status(401).send('Invalid challenge');
 
-    let privKey = forge.pki.privateKeyFromPem(service.private);
-
-    let signature = privKey.sign(challenge.md);
-
-    if (signature !== reqChallenge) return res.status(401).send('Incorrect challenge');
-
     let decrypted;
 
     try {
@@ -176,6 +165,10 @@ const httpsServer = https.createServer(credentials, app);
 httpsServer.listen(process.env.PORT, () => {
     console.log('DynoToken service ready!');
 });
+
+/* app.listen(process.env.PORT, () => {
+    console.log('App ready');
+}); */
 
 process.on('uncaughtException', (err) => {
     console.log(err);
