@@ -18,8 +18,10 @@
   "homepage": "https://github.com/MrJohnCoder/TokenService#readme",
   "dependencies": {
     "body-parser": "^1.18.3",
+    "dotenv": "^6.0.0",
     "express": "^4.16.3",
     "jsonwebtoken": "^8.3.0",
+    "level": "^4.0.0",
     "node-forge": "^0.7.6",
     "randomstring": "^1.1.5"
   }
