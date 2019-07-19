@@ -1,2 +1,2 @@
 # TokenService
-A service for Dyno that centralizes the token storage
+A service for Discord bots that centralizes the token storage
